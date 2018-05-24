@@ -7,9 +7,6 @@ import org.springframework.boot.CommandLineRunner;
 import org.springframework.stereotype.Service;
 
 import java.time.LocalDateTime;
-import java.util.ArrayList;
-import java.util.Collections;
-import java.util.List;
 import java.util.concurrent.*;
 
 @Service
@@ -19,7 +16,7 @@ public class TimestampLoggerService implements CommandLineRunner {
     private TimestampRepository timestampRepository;
 
     @Override
-    public void run(String... args) throws Exception {
+    public void run(String... args) {
 //        args[0] = "-p";
 
         if (args.length > 0) {
@@ -40,30 +37,21 @@ public class TimestampLoggerService implements CommandLineRunner {
     }
 
     private void startLogging() {
-        List<Timestamp> timestamps = Collections.synchronizedList(new ArrayList<>());
-
-//        Runnable saver = () -> {
-//
-//        }
+        TimestampDbQueue queue = new TimestampDbQueue(timestampRepository);
 
         Runnable loggerTask = () -> {
             Timestamp timestamp = new Timestamp();
             timestamp.setValue(LocalDateTime.now());
 
-            timestamps.add(timestamp);
+            queue.add(timestamp);
 
-            try {
-                timestampRepository.saveAll(timestamps);
-                System.out.println("Timestamp saved (" + timestamp + ")");
-            } catch (Exception e) {
-                System.out.println("Error saving timestamp! Retrying...");
-            }
-
-            timestamps.remove(timestamp);
+            System.out.println("Timestamp added to queue (" + timestamp + ")");
         };
 
         ScheduledExecutorService executorService = Executors.newSingleThreadScheduledExecutor();
 
-        ScheduledFuture<?> scheduledFuture = executorService.scheduleAtFixedRate(loggerTask, 1, 1, TimeUnit.SECONDS);
+        executorService.scheduleAtFixedRate(loggerTask, 1, 1, TimeUnit.SECONDS);
+
+        queue.startSaving(10, TimeUnit.MILLISECONDS);
     }
 }
