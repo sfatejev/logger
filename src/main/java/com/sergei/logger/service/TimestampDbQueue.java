@@ -1,61 +1,55 @@
 package com.sergei.logger.service;
 
-import com.sergei.logger.TimestampRepository;
+import com.sergei.logger.repository.TimestampRepository;
 import com.sergei.logger.domain.Timestamp;
+import lombok.extern.slf4j.Slf4j;
 
 import java.util.Queue;
-import java.util.Random;
 import java.util.concurrent.*;
 
-public class TimestampDbQueue  {
+@Slf4j
+public class TimestampDbQueue implements Runnable {
 
-    private TimestampRepository timestampRepository;
+	private static final Integer SAVE_RETRY_INTERVAL = 5;
 
-    private Integer counter = 0;
-    private Integer saved = 0;
+	private Queue<Timestamp> queue = new LinkedBlockingQueue<>();
+	private TimestampRepository timestampRepository;
 
-    private Queue<Timestamp> queue = new LinkedBlockingQueue<>();
+	//Counters used only for debugging purposes
+	private Integer saved = 0;
+	private Integer counter = 0;
 
     public TimestampDbQueue(TimestampRepository timestampRepository) {
         this.timestampRepository = timestampRepository;
     }
 
+	@Override
+	public void run() {
+		if (queue.size() > 0) {
+			try {
+				timestampRepository.save(queue.peek());
+
+				log.info("{} saved [total: {}, counter {}]", queue.peek(), counter, ++saved);
+
+				queue.poll();
+			} catch (Exception e) {
+				log.error("Error saving timestamp, retrying in {} seconds...", SAVE_RETRY_INTERVAL, e);
+
+				try {
+					TimeUnit.SECONDS.sleep(SAVE_RETRY_INTERVAL);
+				} catch (InterruptedException ie) {
+					log.error("", e);
+				}
+			}
+		}
+	}
+
     public void add(Timestamp item) {
-        queue.add(item);
+        queue.offer(item);
         counter++;
     }
 
-    public void startSaving(Integer interval, TimeUnit timeUnit) {
-        Random random = new Random();
-
-        Runnable savingTask = () -> {
-            if (queue.size() > 0) {
-                try {
-                    timestampRepository.save(queue.peek());
-
-                    Integer rnd = random.nextInt(100);
-                    if (rnd > 90) {
-                        throw new Exception();
-                    }
-
-                    System.out.println("Timestamp saved (" + queue.peek() + ")" + "[total: " + counter + ", saved: " + ++saved + "]");
-
-                    queue.poll();
-                } catch (Exception e) {
-                    System.out.println("Error saving timestamp, retrying in 5sec...");
-
-                    try {
-                        TimeUnit.SECONDS.sleep(5);
-                    } catch (InterruptedException e1) {
-                        e1.printStackTrace();
-                    }
-                }
-            }
-        };
-
-        ScheduledExecutorService executorService = Executors.newSingleThreadScheduledExecutor();
-
-        executorService.scheduleAtFixedRate(savingTask, 1, interval, timeUnit);
-    }
-
+	public void startSaving(Integer interval, TimeUnit timeUnit) {
+    	Executors.newSingleThreadScheduledExecutor().scheduleAtFixedRate(this, 1, interval, timeUnit);
+	}
 }

@@ -1,7 +1,9 @@
 package com.sergei.logger.service;
 
-import com.sergei.logger.TimestampRepository;
+import com.sergei.logger.config.ParameterSettings;
+import com.sergei.logger.repository.TimestampRepository;
 import com.sergei.logger.domain.Timestamp;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.CommandLineRunner;
 import org.springframework.stereotype.Service;
@@ -9,20 +11,22 @@ import org.springframework.stereotype.Service;
 import java.time.LocalDateTime;
 import java.util.concurrent.*;
 
+@Slf4j
 @Service
 public class TimestampLoggerService implements CommandLineRunner {
 
     @Autowired
     private TimestampRepository timestampRepository;
 
+	@Autowired
+	private ParameterSettings parameterSettings;
+
     @Override
     public void run(String... args) {
-//        args[0] = "-p";
-
         if (args.length > 0) {
-            if ("-p".equals(args[0])) {
+            if (parameterSettings.getShow().equals(args[0])) {
                 printAllTimestamps();
-            } else if ("-d".equals(args[0])) {
+            } else if (parameterSettings.getDelete().equals(args[0])) {
                 timestampRepository.deleteAll();
             }
         } else {
@@ -39,18 +43,16 @@ public class TimestampLoggerService implements CommandLineRunner {
     private void startLogging() {
         TimestampDbQueue queue = new TimestampDbQueue(timestampRepository);
 
-        Runnable loggerTask = () -> {
+        Runnable timestampAddingTask = () -> {
             Timestamp timestamp = new Timestamp();
             timestamp.setValue(LocalDateTime.now());
 
             queue.add(timestamp);
 
-            System.out.println("Timestamp added to queue (" + timestamp + ")");
+            log.info("Timestamp added to queue {}", timestamp);
         };
 
-        ScheduledExecutorService executorService = Executors.newSingleThreadScheduledExecutor();
-
-        executorService.scheduleAtFixedRate(loggerTask, 1, 1, TimeUnit.SECONDS);
+		Executors.newSingleThreadScheduledExecutor().scheduleAtFixedRate(timestampAddingTask, 1, 1, TimeUnit.SECONDS);
 
         queue.startSaving(10, TimeUnit.MILLISECONDS);
     }

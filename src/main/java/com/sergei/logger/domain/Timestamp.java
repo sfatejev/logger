@@ -8,8 +8,8 @@ import org.springframework.data.mongodb.core.mapping.Document;
 
 import java.time.LocalDateTime;
 
-@Document(collection = "timestamp")
 @ToString
+@Document(collection = "timestamp")
 public class Timestamp {
 
     @Id
@@ -20,3 +20,4 @@ public class Timestamp {
     @Setter
     public LocalDateTime value;
 }
+
